@@ -1,0 +1,7 @@
+id,status,sector,name,cost_overrun,time_elapsed,progress,baseline_spend_gap,improved_budget_burn_gap,idle_funds_ratio,primary_rationale
+PRJ-2027,Dropped (Baseline False Positive),Roads,Bridge repair #28,2.5%,0.63,47.3%,0.30,-0.09,11.4%,Early project with normal tranche absorption wrongly flagged by flawed spend_vs_progress formula.
+PRJ-2117,Dropped (Baseline False Positive),Roads,Bridge repair #118,9.7%,0.32,16.8%,0.75,0.06,2.0%,Early project with normal tranche absorption wrongly flagged by flawed spend_vs_progress formula.
+PRJ-2237,Dropped (Baseline False Positive),Power,Substation #238,8.5%,0.30,25.1%,0.71,0.03,1.3%,Early project with normal tranche absorption wrongly flagged by flawed spend_vs_progress formula.
+PRJ-2129,Newly Flagged (High Audit Risk),Water,Pipeline upgrade #130,0.2%,1.18,92.3%,-0.11,-0.11,18.8%,High parked idle funds or unclipped schedule slippage caught by improved indicators.
+PRJ-2146,Newly Flagged (High Audit Risk),Roads,Highway widening #147,-2.1%,0.38,36.2%,0.64,0.14,0.0%,High parked idle funds or unclipped schedule slippage caught by improved indicators.
+PRJ-2243,Newly Flagged (High Audit Risk),Schools,Hostel building #244,-4.2%,0.44,49.0%,0.50,0.15,0.6%,High parked idle funds or unclipped schedule slippage caught by improved indicators.

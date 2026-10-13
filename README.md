@@ -26,14 +26,25 @@ LEDGERLENS is a **screening tool, not a fraud or corruption detector**. An anoma
 
 Project data → Feature engineering → Standardization → Isolation Forest → Anomaly score → Human review
 
-## Baseline Features
+## Feature Engineering
 
-- Cost overrun
-- Fund utilisation
-- Funds released ratio
-- Time elapsed
-- Progress vs time
-- Spending vs progress
+LEDGERLENS provides both the original baseline indicators and a revised, peer-normalized feature set (Issue #2):
+
+### Baseline Indicators
+- `cost_overrun`: `(actual_cost - est_cost) / est_cost`
+- `fund_utilisation`: `(funds_used / funds_released).clip(0, 1)`
+- `funds_released_ratio`: `funds_released / est_cost`
+- `time_elapsed`: `elapsed_days / planned_days`
+- `progress_vs_time`: `progress_pct / 100 - time_elapsed.clip(upper=1)`
+- `spend_vs_progress`: `fund_utilisation - progress_pct / 100`
+
+### Improved Indicators (Issue #2)
+- `budget_burn_vs_progress`: `(funds_used / est_cost) - (progress_pct / 100)` (true budget expensed vs physical progress)
+- `cost_overrun_peer_gap`: `cost_overrun - median(cost_overrun_sector)` (sector peer-normalized cost escalation)
+- `fund_util_peer_gap`: `fund_utilisation - median(fund_utilisation_sector)` (sector peer-normalized tranche absorption)
+- `schedule_slippage`: `progress_pct / 100 - time_elapsed` (unclipped timeline execution gap)
+- `idle_funds_ratio`: `(funds_released - funds_used) / est_cost` (parked public treasury funds)
+- `cost_overrun`: `(actual_cost - est_cost) / est_cost` (absolute financial cost inflation)
 
 ## Dataset
 
@@ -44,10 +55,17 @@ The repository contains a reproducible **260-project synthetic starter dataset**
 Python • Pandas • NumPy • scikit-learn • Isolation Forest • Streamlit • GitHub
 
 ## Run locally
-
+ 
 ```bash
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
+```
+
+To run the feature engineering evaluation and regenerate `docs/feature_engineering_report.md`:
+
+```bash
+python evaluate_features.py
+python -m pytest
 ```
 
 ## Competition Workflow
@@ -76,12 +94,19 @@ Anomalies are candidates for human review, not proof of fraud or misconduct. Sin
 LEDGERLENS/
 ├── app.py
 ├── model.py
+├── evaluate_features.py
 ├── sample_projects.csv
 ├── requirements.txt
 ├── CONTRIBUTING.md
 ├── PRESENTATION.md
 ├── LICENSE
 ├── .gitignore
+├── docs/
+│   ├── feature_engineering_report.md
+│   ├── baseline_flagged_projects.csv
+│   ├── improved_flagged_projects.csv
+│   └── feature_diff_cases.csv
 └── tests/
-    └── test_model.py
+    ├── test_model.py
+    └── test_feature_engineering.py
 ```
