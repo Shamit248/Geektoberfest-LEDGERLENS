@@ -57,7 +57,26 @@ The revised feature set addresses these structural flaws with six domain-grounde
    $$\text{cost\_overrun} = \frac{\text{actual\_cost} - \text{est\_cost}}{\text{est\_cost}}$$
    *Rationale:* Retained alongside peer gap to ensure extreme absolute budget expansions (>50%) are flagged regardless of sector baseline.
 
-## 4. Head-to-Head Model Comparison
+## 4. Feature Correlation Analysis
+
+Computed on the full 260-project dataset.
+
+| | `budget_burn_vs_progress` | `schedule_slippage` | `idle_funds_ratio` | `cost_overrun_peer_gap` | `fund_util_peer_gap` |
+|---|---|---|---|---|---|
+| `budget_burn_vs_progress` | 1.000 | −0.636 | −0.365 | 0.139 | 0.364 |
+| `schedule_slippage` | −0.636 | 1.000 | −0.070 | −0.066 | −0.039 |
+| `idle_funds_ratio` | −0.365 | −0.070 | 1.000 | −0.008 | −0.859 |
+| `cost_overrun_peer_gap` | 0.139 | −0.066 | −0.008 | 1.000 | 0.019 |
+| `fund_util_peer_gap` | 0.364 | −0.039 | −0.859 | 0.019 | 1.000 |
+
+> [!NOTE]
+> `idle_funds_ratio` and `fund_util_peer_gap` share r = −0.859 because high idle funds mechanically depress tranche absorption. Both are retained: `idle_funds_ratio` measures absolute slack; `fund_util_peer_gap` measures it relative to sector peers.
+
+Notable baseline collinearities addressed by dropping features:
+- `funds_released_ratio` ↔ `time_elapsed`: r = **0.846** (severe collinearity — both dropped)
+- `spend_vs_progress` ↔ `funds_released_ratio`: r = **−0.666** (lifecycle conflation)
+
+## 5. Head-to-Head Model Comparison
 
 Both models were evaluated on the same 260 projects using `IsolationForest(n_estimators=250, contamination=0.12, random_state=42)` with `StandardScaler` preprocessing.
 
@@ -69,7 +88,7 @@ Both models were evaluated on the same 260 projects using `IsolationForest(n_est
 | Multi-seed Mean Jaccard | 0.988 | 0.982 |
 | Multi-seed Min Jaccard | 0.939 | 0.939 |
 | Consistently Flagged (All 10 Seeds) | 30 | 31 |
-| Flag Overlap (Jaccard) | 1.000 (reference) | 82.9% (29/32) |
+| Flag Overlap (Jaccard vs baseline) | 1.000 (reference) | 82.9% (29/32) |
 
 ### Sector Distribution Comparison
 
@@ -81,7 +100,7 @@ Both models were evaluated on the same 260 projects using `IsolationForest(n_est
 | Schools | 46 | 3 | 0.065 | 4 | 0.087 |
 | Water | 61 | 7 | 0.115 | 8 | 0.131 |
 
-## 5. Detailed Case Studies: Changed Classifications
+## 6. Detailed Case Studies: Changed Classifications
 
 Understanding why specific projects changed status confirms that the model is responding to genuine governance patterns rather than random noise.
 
@@ -96,37 +115,60 @@ Understanding why specific projects changed status confirms that the model is re
 
 ### Case In Focus: Resolving False Positives
 
-- **`PRJ-2117` (Roads - Bridge repair #118):**
-  - Project status: 32% of planned duration elapsed, 24.3% of budget released, 16.8% physical progress delivered.
-  - Implementing agency spent 91.9% of the released mobilization advance.
-  - *Baseline Error:* `spend_vs_progress = 91.9% - 16.8% = +75.1%`. Baseline marked this project as a severe spending runaway!
-  - *Improved Correction:* Actual budget burn is $(24.3\% \times 91.9\%) = 22.3\%$. The true budget burn gap is $+22.3\% - 16.8\% = +5.5\%$, which is healthy and on-track. The improved model drops this false positive (score: +0.074, firmly unflagged).
+**`PRJ-2117` (Roads - Bridge repair #118):**
+- Project status: 32% of planned duration elapsed, 24.3% of budget released, 16.8% physical progress delivered.
+- Implementing agency spent 91.9% of the released mobilization advance.
+- *Baseline Error:* `spend_vs_progress = 91.9% - 16.8% = +75.1%`. Baseline marked this project as a severe spending runaway!
+- *Improved Correction:* Actual budget burn is (24.3% × 91.9%) = 22.3%. The true budget burn gap is +22.3% - 16.8% = +5.5%, which is healthy and on-track. The improved model drops this false positive.
 
 ### Case In Focus: Detecting Parked Capital & Unclipped Delays
 
-- **`PRJ-2129` (Water - Pipeline upgrade #130):**
-  - Project status: 100% of funds released by treasury, but only 81.2% utilised ($18.8\%$ of total budget idle).
-  - Project is 18% overdue (elapsed/planned = 1.18, schedule slippage = -0.25).
-  - *Baseline Blindspot:* Because `time_elapsed` was clipped to 1.0, the schedule delay was truncated, and idle funds were unmeasured.
-  - *Improved Detection:* High idle funds ratio (18.8%) and unclipped slippage trigger an anomaly score of -0.022, placing it in the review queue.
+**`PRJ-2129` (Water - Pipeline upgrade #130):**
+- Project status: 100% of funds released by treasury, but only 81.2% utilised (18.8% of total budget idle).
+- Project is 18% overdue (elapsed/planned = 1.18, schedule slippage = -0.25).
+- *Baseline Blindspot:* Because `time_elapsed` was clipped to 1.0, the schedule delay was truncated, and idle funds were unmeasured.
+- *Improved Detection:* High idle funds ratio (18.8%) and unclipped slippage trigger anomaly detection and place it in the review queue.
 
-## 6. Data Hygiene & Missing/Extreme Value Handling
+## 7. Data Hygiene & Missing/Extreme Value Handling
 
 The improved `load_data()` pipeline explicitly implements defensive data hygiene:
 - **Denominator Protection:** Zero or negative values in `est_cost`, `planned_days`, and `funds_released` are replaced with NaN before division to eliminate zero-division and infinite values, followed by robust imputation.
-- **Bounded Winsorization:** To prevent isolated data entry errors from distorting `StandardScaler`, extreme ratios are clipped at domain bounds (`cost_overrun` $\in [-1.0, 10.0]$, `budget_burn_vs_progress` $\in [-2.0, 2.0]$, `schedule_slippage` $\in [-10.0, 2.0]$).
-- **Percentage Normalization:** Progress inputs in $[0, 1.5]$ are automatically detected and converted to $[0, 100]$, and clamped to $[0, 100]$.
+- **Bounded Winsorization:** To prevent isolated data entry errors from distorting `StandardScaler`, extreme ratios are clipped at domain bounds (`cost_overrun` ∈ [-1.0, 10.0], `budget_burn_vs_progress` ∈ [-2.0, 2.0], `schedule_slippage` ∈ [-10.0, 2.0]).
+- **Percentage Normalization:** Progress inputs in [0, 1.5] are automatically detected and converted to [0, 100], and clamped to [0, 100].
 - **Robust Sector Aggregations:** Sector medians gracefully fall back to portfolio medians if a sector has insufficient samples.
 
-## 7. Data Leakage Verification
+## 8. Data Leakage Verification
 
 The evaluation avoids data leakage:
-- All engineered indicators are computed strictly row-wise or using historical/sector median statistics.
+- All engineered indicators are computed strictly row-wise or using sector median statistics computed on the same dataset (no hold-out labels).
 - No ground-truth labels are used during feature engineering, scaling, or model fitting.
 - Isolation Forest unsupervised training operates purely on feature distributions.
 
-## 8. Limitations & Synthetic Dataset Constraints
+> [!WARNING]
+> In a production batch-prediction setting, sector medians for `cost_overrun_peer_gap` and `fund_util_peer_gap` should be fitted on a held-out reference period to avoid distribution leakage.
+
+## 9. Limitations & Synthetic Dataset Constraints
 
 - **No Ground-Truth Fraud Labels:** The starter dataset is a synthetic simulation of 260 projects without verified audit outcomes. Anomalies are statistical outliers for review, not evidence of wrongdoing.
-- **Contamination Hyperparameter:** The 12.3% anomaly flag rate is predetermined by the `contamination=0.12` parameter.
+- **Contamination Hyperparameter:** The 12.3% anomaly flag rate is predetermined by the `contamination=0.12` parameter. A calibration study with labelled audit outcomes would improve it.
+- **Small Sector Groups:** ~52 projects per sector on this synthetic dataset. Real deployments should compute peer medians on ≥500 same-sector projects for statistical robustness.
 - **Synthetic Uniformity:** Real government datasets feature messy text, unstructured milestones, multi-source accounting reconciliations, and temporal reporting lags not present in this synthetic starter.
+- **`idle_funds_ratio` / `fund_util_peer_gap` collinearity:** r = −0.859 on this dataset; production deployments may benefit from dimensionality treatment.
+
+## 10. Reproducibility
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run all tests (3 original + 35 feature-engineering tests)
+python -m pytest tests/ -v
+
+# Regenerate this report with live statistics
+python evaluate_features.py
+
+# Launch the Streamlit app
+streamlit run app.py
+```
+
+All tests pass on Python 3.13.5, scikit-learn 1.x, pandas 2.x.
